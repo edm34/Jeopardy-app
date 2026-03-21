@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeopardy! Home Buzzer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="screen active">
+      <h1 class="logo">JEOPARDY!</h1>
+      <h2>Home Buzzer System</h2>
+      <p class="subtitle">Play along with the live broadcast in real time</p>
+
+      <div class="setup-section">
+        <h3>Your Name</h3>
+        <input type="text" id="player-name" placeholder="Enter your name" value="You">
+      </div>
+
+      <div class="setup-section">
+        <h3>Tonight's Contestants</h3>
+        <div class="contestant-inputs">
+          <input type="text" id="contestant-1" placeholder="Contestant 1 (left podium)">
+          <input type="text" id="contestant-2" placeholder="Contestant 2 (center podium)">
+          <input type="text" id="contestant-3" placeholder="Contestant 3 (right podium)">
+        </div>
+      </div>
+
+      <div class="setup-section">
+        <h3>Broadcast Sync</h3>
+        <p class="hint">Start the app when Alex/Ken reads the first clue. Use the sync button anytime to recalibrate.</p>
+      </div>
+
+      <button id="start-game-btn" class="btn-primary">Start Game</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+      <!-- Scoreboard -->
+      <div id="scoreboard">
+        <div class="score-card contestant" id="score-c1">
+          <span class="score-name">Contestant 1</span>
+          <span class="score-value">$0</span>
+          <div class="score-adjust">
+            <button class="adj-btn" data-action="adjust" data-player="c1">Adjust</button>
+          </div>
+        </div>
+        <div class="score-card player" id="score-player">
+          <span class="score-name crown">You</span>
+          <span class="score-value">$0</span>
+        </div>
+        <div class="score-card contestant" id="score-c2">
+          <span class="score-name">Contestant 2</span>
+          <span class="score-value">$0</span>
+          <div class="score-adjust">
+            <button class="adj-btn" data-action="adjust" data-player="c2">Adjust</button>
+          </div>
+        </div>
+        <div class="score-card contestant" id="score-c3">
+          <span class="score-name">Contestant 3</span>
+          <span class="score-value">$0</span>
+          <div class="score-adjust">
+            <button class="adj-btn" data-action="adjust" data-player="c3">Adjust</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Round Info -->
+      <div id="round-info">
+        <span id="round-label">Jeopardy! Round</span>
+        <span id="clue-count">Clue: 0 / 30</span>
+      </div>
+
+      <!-- Clue Value Selector -->
+      <div id="clue-selector">
+        <h3>Select Clue Value</h3>
+        <div id="value-buttons" class="value-grid"></div>
+        <div id="daily-double-toggle">
+          <button id="dd-btn" class="btn-dd">Daily Double</button>
+        </div>
+      </div>
+
+      <!-- Buzzer Area -->
+      <div id="buzzer-area">
+        <div id="buzzer-status">
+          <span id="status-text">Select a clue to begin</span>
+          <div id="timer-bar-container">
+            <div id="timer-bar"></div>
+          </div>
+        </div>
+
+        <button id="buzzer-btn" disabled>
+          <span class="buzzer-label">BUZZ IN</span>
+          <span class="buzzer-hint">Press SPACEBAR or tap</span>
+        </button>
+
+        <!-- Post-buzz response -->
+        <div id="response-area" class="hidden">
+          <div id="response-timer">
+            <span id="response-time">5</span>s to respond
+          </div>
+          <div class="response-buttons">
+            <button class="btn-correct" id="btn-correct">Correct</button>
+            <button class="btn-incorrect" id="btn-incorrect">Wrong</button>
+          </div>
+        </div>
+
+        <!-- Contestant buzzed -->
+        <div id="contestant-buzzed-area" class="hidden">
+          <p id="contestant-buzz-text"></p>
+          <div class="response-buttons">
+            <button class="btn-correct" data-action="contestant-correct">They got it right</button>
+            <button class="btn-incorrect" data-action="contestant-wrong">They got it wrong</button>
+          </div>
+        </div>
+
+        <!-- No one buzzed / clue result -->
+        <div id="clue-result-area" class="hidden">
+          <p id="result-text"></p>
+          <button class="btn-next" id="btn-next-clue">Next Clue</button>
+        </div>
+      </div>
+
+      <!-- Daily Double Wager -->
+      <div id="dd-wager-area" class="hidden">
+        <h3>DAILY DOUBLE!</h3>
+        <div id="dd-who">
+          <button class="btn-dd-who active" data-who="player">I found it</button>
+          <button class="btn-dd-who" data-who="contestant">Contestant found it</button>
+        </div>
+        <div id="dd-wager-input">
+          <label>Wager: $<input type="number" id="dd-wager" min="5" step="1" value="1000"></label>
+        </div>
+        <div id="dd-contestant-select" class="hidden">
+          <label>Which contestant?
+            <select id="dd-contestant-picker">
+              <option value="c1">Contestant 1</option>
+              <option value="c2">Contestant 2</option>
+              <option value="c3">Contestant 3</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn-primary" id="dd-submit">Start Daily Double</button>
+        <div id="dd-response" class="hidden">
+          <div id="dd-response-timer"><span id="dd-time">10</span>s</div>
+          <div class="response-buttons">
+            <button class="btn-correct" id="dd-correct">Correct</button>
+            <button class="btn-incorrect" id="dd-incorrect">Wrong</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Jeopardy -->
+      <div id="final-jeopardy-area" class="hidden">
+        <h2>FINAL JEOPARDY!</h2>
+        <div class="fj-section">
+          <h3>Your Wager</h3>
+          <div class="fj-wager-row">
+            <label>$<input type="number" id="fj-player-wager" min="0" value="0"></label>
+            <span class="fj-max">(Max: $<span id="fj-player-max">0</span>)</span>
+          </div>
+        </div>
+        <div class="fj-section">
+          <h3>Contestant Wagers (enter after reveal)</h3>
+          <div id="fj-contestant-wagers"></div>
+        </div>
+        <button class="btn-primary" id="fj-start-timer">Start 30s Think Time</button>
+        <div id="fj-timer-display" class="hidden">
+          <span id="fj-timer-value">30</span>s
+        </div>
+        <div id="fj-results" class="hidden">
+          <h3>Results</h3>
+          <div id="fj-result-inputs"></div>
+          <button class="btn-primary" id="fj-apply">Apply Results</button>
+        </div>
+      </div>
+
+      <!-- Game Controls -->
+      <div id="game-controls">
+        <button class="ctrl-btn" id="btn-round-toggle">Switch to Double Jeopardy</button>
+        <button class="ctrl-btn" id="btn-final-jeopardy">Final Jeopardy!</button>
+        <button class="ctrl-btn" id="btn-sync">Re-Sync Timing</button>
+        <button class="ctrl-btn" id="btn-end-game">End Game</button>
+      </div>
+    </div>
+
+    <!-- Score Adjust Modal -->
+    <div id="adjust-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Adjust Score: <span id="adjust-name"></span></h3>
+        <p>Current: $<span id="adjust-current">0</span></p>
+        <label>New Score: $<input type="number" id="adjust-value" step="100"></label>
+        <div class="modal-buttons">
+          <button class="btn-primary" id="adjust-save">Save</button>
+          <button class="ctrl-btn" id="adjust-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- End Game / Summary Screen -->
+    <div id="summary-screen" class="screen">
+      <h1 class="logo">FINAL SCORES</h1>
+      <div id="summary-scores"></div>
+      <button class="btn-primary" id="btn-new-game">New Game</button>
+    </div>
+
+    <!-- Audio cues (generated programmatically) -->
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
