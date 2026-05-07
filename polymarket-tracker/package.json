@@ -1,0 +1,27 @@
+{
+  "name": "polymarket-tracker",
+  "version": "0.1.0",
+  "description": "Tracks top Polymarket traders by PnL across multiple time windows, alerts on their trades via WhatsApp, optionally mirrors trades, and serves a dashboard.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "pm-tracker": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js watch",
+    "leaderboard": "node src/index.js leaderboard",
+    "watch": "node src/index.js watch",
+    "dashboard": "node src/index.js dashboard",
+    "seed": "node src/index.js seed"
+  },
+  "dependencies": {
+    "@polymarket/clob-client": "^4.13.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "express": "^4.19.2",
+    "twilio": "^5.3.0"
+  }
+}

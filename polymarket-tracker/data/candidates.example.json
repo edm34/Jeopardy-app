@@ -1,0 +1,6 @@
+{
+  "_comment": "Seed list of wallet addresses to evaluate when ranking traders. The bot will fetch each wallet's positions+activity, compute PnL across the configured time windows, and pick the top N. Add as many addresses as you can find from polymarket.com/leaderboard, on-chain explorers, or community lists. Copy this file to data/candidates.json before running.",
+  "wallets": [
+    "0x0000000000000000000000000000000000000000"
+  ]
+}

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polymarket Tracker</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: #0d1117;
+        color: #e6edf3;
+        margin: 0;
+        padding: 24px;
+      }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .meta { color: #8b949e; font-size: 13px; margin-bottom: 24px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .card h2 { margin: 0 0 10px; font-size: 15px; color: #58a6ff; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 4px 6px; }
+      th { color: #8b949e; font-weight: 500; border-bottom: 1px solid #30363d; }
+      tr td:first-child { color: #8b949e; width: 28px; }
+      .pnl-pos { color: #3fb950; }
+      .pnl-neg { color: #f85149; }
+      .wallet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .section { margin-top: 28px; }
+      .empty { color: #8b949e; font-style: italic; }
+      a { color: #58a6ff; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <h1>Polymarket Trader Tracker</h1>
+    <div class="meta" id="meta">Loading...</div>
+    <div class="grid" id="leaderboards"></div>
+
+    <div class="section">
+      <h2>Recently active tracked wallets</h2>
+      <div id="recent" class="card"></div>
+    </div>
+    <div class="section">
+      <h2>Mirrored trades</h2>
+      <div id="mirrored" class="card"></div>
+    </div>
+
+    <script>
+      const fmtUsd = (n) => {
+        const sign = n < 0 ? '-' : '';
+        const a = Math.abs(n);
+        if (a >= 1e6) return sign + '$' + (a / 1e6).toFixed(2) + 'M';
+        if (a >= 1e3) return sign + '$' + (a / 1e3).toFixed(1) + 'k';
+        return sign + '$' + a.toFixed(2);
+      };
+      const shortWallet = (w) => w.slice(0, 6) + '...' + w.slice(-4);
+      const polyUserUrl = (w) => 'https://polymarket.com/profile/' + w;
+      const tsHuman = (ts) => ts ? new Date(ts * 1000).toLocaleString() : '';
+
+      async function refresh() {
+        const [lbRes, recentRes, mirRes] = await Promise.all([
+          fetch('/api/leaderboards').then((r) => r.json()),
+          fetch('/api/recent-trades').then((r) => r.json()),
+          fetch('/api/mirrored').then((r) => r.json()),
+        ]);
+        document.getElementById('meta').textContent =
+          'leaderboards updated ' + (lbRes.updatedAt ? tsHuman(lbRes.updatedAt) : 'never');
+
+        const grid = document.getElementById('leaderboards');
+        grid.innerHTML = '';
+        for (const w of lbRes.windows) {
+          const rows = (lbRes.leaderboards || {})[w.id] || [];
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML =
+            '<h2>' + w.label + '</h2>' +
+            (rows.length === 0
+              ? '<div class="empty">no data</div>'
+              : '<table><thead><tr><th>#</th><th>wallet</th><th style="text-align:right">PnL</th></tr></thead><tbody>' +
+                rows
+                  .map(
+                    (r, i) =>
+                      '<tr><td>' + (i + 1) + '</td>' +
+                      '<td class="wallet"><a href="' + polyUserUrl(r.wallet) + '" target="_blank">' + shortWallet(r.wallet) + '</a></td>' +
+                      '<td style="text-align:right" class="' + (r.pnl >= 0 ? 'pnl-pos' : 'pnl-neg') + '">' + fmtUsd(r.pnl) + '</td></tr>',
+                  )
+                  .join('') +
+                '</tbody></table>');
+          grid.appendChild(card);
+        }
+
+        const recent = document.getElementById('recent');
+        recent.innerHTML = recentRes.lastSeen.length === 0
+          ? '<div class="empty">no activity yet</div>'
+          : '<table><thead><tr><th>wallet</th><th>last trade</th></tr></thead><tbody>' +
+            recentRes.lastSeen
+              .map((r) =>
+                '<tr><td class="wallet"><a href="' + polyUserUrl(r.wallet) + '" target="_blank">' + shortWallet(r.wallet) + '</a></td>' +
+                '<td>' + tsHuman(r.ts) + '</td></tr>',
+              )
+              .join('') +
+            '</tbody></table>';
+
+        const mir = document.getElementById('mirrored');
+        const trades = mirRes.mirroredTrades || [];
+        mir.innerHTML = trades.length === 0
+          ? '<div class="empty">no mirrored trades yet (open: ' + fmtUsd(mirRes.openMirroredUsdc || 0) + ')</div>'
+          : '<div style="margin-bottom:8px;color:#8b949e">open mirrored: ' + fmtUsd(mirRes.openMirroredUsdc) + '</div>' +
+            '<table><thead><tr><th>when</th><th>src</th><th>side</th><th style="text-align:right">size</th><th style="text-align:right">price</th><th style="text-align:right">$</th></tr></thead><tbody>' +
+            trades
+              .map((t) =>
+                '<tr><td>' + tsHuman(t.ts) + '</td>' +
+                '<td class="wallet">' + shortWallet(t.srcWallet) + '</td>' +
+                '<td>' + t.side + '</td>' +
+                '<td style="text-align:right">' + t.shares.toFixed(2) + '</td>' +
+                '<td style="text-align:right">$' + t.price.toFixed(3) + '</td>' +
+                '<td style="text-align:right">' + fmtUsd(t.usdc) + '</td></tr>',
+              )
+              .join('') +
+            '</tbody></table>';
+      }
+
+      refresh();
+      setInterval(refresh, 10_000);
+    </script>
+  </body>
+</html>
