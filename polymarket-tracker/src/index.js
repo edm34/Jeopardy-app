@@ -5,14 +5,15 @@ const HELP = `
 pm-tracker <command>
 
 Commands:
+  start                  Hosted-deploy entrypoint. Runs watch + dashboard
+                         together in one Node process. This is what Railway /
+                         Render / Fly should invoke (npm start).
   leaderboard [--fast]   Auto-discover top Polymarket traders from lb-api,
                          then print the top 10 PnL leaders across 30d / 60d /
                          90d / 6m / 12m / all-time. --fast skips the local
                          compute and prints only 30d + all-time.
-  watch                  Long-running daemon: keeps the trader pool fresh,
-                         polls each top-N wallet's trades, sends WhatsApp
-                         alerts, optionally mirrors trades on Polymarket.
-  dashboard              Web dashboard at http://localhost:8787.
+  watch                  Watch daemon only (no dashboard).
+  dashboard              Dashboard only (no watch loop).
   seed --wallets a,b,c   (Optional) Pin extra wallets that should always
                          live in the pool, even if they fall out of lb-api's
                          top 100s.
@@ -25,6 +26,11 @@ in .env (copy .env.example).
 async function main() {
   const [, , cmd = 'help', ...rest] = process.argv;
   switch (cmd) {
+    case 'start': {
+      const { runStart } = await import('./cli/start.js');
+      await runStart();
+      break;
+    }
     case 'leaderboard': {
       const { runLeaderboard } = await import('./cli/leaderboard.js');
       await runLeaderboard();

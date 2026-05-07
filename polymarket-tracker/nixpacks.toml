@@ -1,0 +1,12 @@
+# Nixpacks build config for Railway. The project root in this repo lives at
+# polymarket-tracker/, so we point Railway at the right package.json.
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev || npm install --omit=dev"]
+
+[start]
+cmd = "node src/index.js start"

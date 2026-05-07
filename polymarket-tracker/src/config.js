@@ -51,7 +51,10 @@ export const config = {
     maxTradeAgeSec: num(process.env.MAX_TRADE_AGE_SEC, 120),
   },
   dashboard: {
-    port: num(process.env.DASHBOARD_PORT, 8787),
+    // Railway / Render / Fly inject PORT. Honor it first so the dashboard
+    // binds to whatever the platform expects; fall back to DASHBOARD_PORT
+    // (or 8787) for local dev.
+    port: num(process.env.PORT ?? process.env.DASHBOARD_PORT, 8787),
   },
   log: {
     level: (process.env.LOG_LEVEL || 'info').toLowerCase(),

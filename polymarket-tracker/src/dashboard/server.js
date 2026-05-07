@@ -40,7 +40,8 @@ export function runDashboard() {
     });
   });
 
-  app.listen(config.dashboard.port, () => {
-    log.info(`dashboard at http://localhost:${config.dashboard.port}`);
+  // Bind to 0.0.0.0 so Railway / Render / Fly health checks can reach us.
+  app.listen(config.dashboard.port, '0.0.0.0', () => {
+    log.info(`dashboard listening on port ${config.dashboard.port}`);
   });
 }

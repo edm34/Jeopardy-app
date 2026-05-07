@@ -11,7 +11,7 @@
     "pm-tracker": "src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js watch",
+    "start": "node src/index.js start",
     "leaderboard": "node src/index.js leaderboard",
     "watch": "node src/index.js watch",
     "dashboard": "node src/index.js dashboard",

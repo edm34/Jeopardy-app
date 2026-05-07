@@ -8,6 +8,9 @@ mirrors their trades from a wallet you control.
 **Zero-config:** the bot auto-discovers who the top traders are. You don't
 maintain any wallet lists.
 
+> **Just want to run it?** See [DEPLOY.md](./DEPLOY.md) for a 10-minute
+> Railway setup that gives you a public dashboard URL and runs the bot 24/7.
+
 ## How it discovers traders
 
 On every refresh (default every 15 min) it queries Polymarket's public ranking
