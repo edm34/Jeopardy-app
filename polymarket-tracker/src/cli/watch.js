@@ -28,6 +28,14 @@ function rankFor(state, wallet) {
   return best;
 }
 
+function usernameFor(state, wallet) {
+  for (const rows of Object.values(state.leaderboards || {})) {
+    const r = rows.find((x) => x.wallet === wallet);
+    if (r?.username) return r.username;
+  }
+  return state.pool?.[wallet]?.username || null;
+}
+
 export async function runWatch() {
   const notifiers = buildNotifiers();
   log.info(`notifiers: ${notifiers.map((n) => n.name).join(', ')}`);
@@ -65,7 +73,8 @@ export async function runWatch() {
       }
       for (const t of fresh) {
         const rank = rankFor(state, w);
-        const text = formatTrade(t, rank);
+        const username = usernameFor(state, w);
+        const text = formatTrade(t, rank, username);
         await notifyAll(notifiers, text);
         if (config.execute.enabled) {
           const result = await mirrorTrade(t);

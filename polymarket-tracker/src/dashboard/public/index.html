@@ -73,25 +73,36 @@
           fetch('/api/mirrored').then((r) => r.json()),
         ]);
         document.getElementById('meta').textContent =
+          'pool: ' + (lbRes.poolSize || 0) + ' wallets · ' +
           'leaderboards updated ' + (lbRes.updatedAt ? tsHuman(lbRes.updatedAt) : 'never');
 
         const grid = document.getElementById('leaderboards');
         grid.innerHTML = '';
         for (const w of lbRes.windows) {
           const rows = (lbRes.leaderboards || {})[w.id] || [];
+          const sourceTag = rows[0]?.source === 'lb-api'
+            ? '<span style="color:#3fb950;font-size:11px;font-weight:400;margin-left:6px">native</span>'
+            : '<span style="color:#d29922;font-size:11px;font-weight:400;margin-left:6px">computed</span>';
           const card = document.createElement('div');
           card.className = 'card';
           card.innerHTML =
-            '<h2>' + w.label + '</h2>' +
+            '<h2>' + w.label + (rows.length ? sourceTag : '') + '</h2>' +
             (rows.length === 0
               ? '<div class="empty">no data</div>'
-              : '<table><thead><tr><th>#</th><th>wallet</th><th style="text-align:right">PnL</th></tr></thead><tbody>' +
+              : '<table><thead><tr><th>#</th><th>trader</th><th style="text-align:right">PnL</th></tr></thead><tbody>' +
                 rows
                   .map(
-                    (r, i) =>
-                      '<tr><td>' + (i + 1) + '</td>' +
-                      '<td class="wallet"><a href="' + polyUserUrl(r.wallet) + '" target="_blank">' + shortWallet(r.wallet) + '</a></td>' +
-                      '<td style="text-align:right" class="' + (r.pnl >= 0 ? 'pnl-pos' : 'pnl-neg') + '">' + fmtUsd(r.pnl) + '</td></tr>',
+                    (r, i) => {
+                      const handle = r.username
+                        ? '@' + r.username
+                        : shortWallet(r.wallet);
+                      const verified = r.verifiedBadge
+                        ? ' <span title="verified" style="color:#58a6ff">✓</span>'
+                        : '';
+                      return '<tr><td>' + (i + 1) + '</td>' +
+                        '<td class="wallet"><a href="' + polyUserUrl(r.wallet) + '" target="_blank">' + handle + '</a>' + verified + '</td>' +
+                        '<td style="text-align:right" class="' + (r.pnl >= 0 ? 'pnl-pos' : 'pnl-neg') + '">' + fmtUsd(r.pnl) + '</td></tr>';
+                    },
                   )
                   .join('') +
                 '</tbody></table>');

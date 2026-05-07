@@ -9,8 +9,10 @@ const CANDIDATES_PATH = path.join(DATA_DIR, 'candidates.json');
 
 const DEFAULT_STATE = {
   lastSeenTradeTs: {}, // { walletAddress: unixSeconds }
-  leaderboards: {}, // { windowId: [{ wallet, pnl, ... }] }
+  leaderboards: {}, // { windowId: [{ wallet, pnl, source, username }] }
   leaderboardsUpdatedAt: 0,
+  pool: {}, // { walletAddress: { firstSeen, lastSeen, username, xUsername, profileImage, verifiedBadge, nativePnl, nativeVol } }
+  poolUpdatedAt: 0,
   mirroredTrades: [], // { srcWallet, srcTradeId, ourOrderId, marketId, side, size, price, ts }
   openMirroredUsdc: 0,
 };
@@ -57,6 +59,31 @@ export async function saveCandidates(wallets) {
     CANDIDATES_PATH,
     JSON.stringify({ wallets: dedup }, null, 2),
   );
+}
+
+// Merge auto-discovered entries into the rolling pool. Existing wallets get
+// fresh metadata + bumped lastSeen; new wallets get firstSeen=now.
+export function upsertPool(state, entries, { ttlDays = 180 } = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const ttlSec = ttlDays * 86400;
+  const pool = state.pool ?? {};
+  for (const [wallet, meta] of entries.entries()) {
+    const prev = pool[wallet] ?? { firstSeen: now };
+    pool[wallet] = {
+      ...prev,
+      ...meta,
+      lastSeen: now,
+    };
+  }
+  // Drop wallets that haven't appeared in any leaderboard for ttlDays.
+  for (const [wallet, meta] of Object.entries(pool)) {
+    if (!entries.has(wallet) && meta.lastSeen && now - meta.lastSeen > ttlSec) {
+      delete pool[wallet];
+    }
+  }
+  state.pool = pool;
+  state.poolUpdatedAt = now;
+  return state;
 }
 
 export const paths = { ROOT, DATA_DIR, STATE_PATH, CANDIDATES_PATH };

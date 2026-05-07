@@ -1,78 +1,93 @@
 # polymarket-tracker
 
 A Node.js daemon that tracks the top traders on [Polymarket](https://polymarket.com)
-by realized + unrealized PnL across multiple time windows, alerts you on every
-trade they make via WhatsApp, exposes a small dashboard, and (optionally)
+across **30d / 60d / 90d / 6m / 12m / all-time** PnL windows, alerts you on
+every trade they make via WhatsApp, exposes a small dashboard, and (optionally)
 mirrors their trades from a wallet you control.
 
-> **Status:** v0.1, single-author. The Polymarket public APIs are not formally
-> versioned and field names have shifted historically; if rankings or alerts
-> stop populating, see *Troubleshooting* below before assuming a code bug.
+**Zero-config:** the bot auto-discovers who the top traders are. You don't
+maintain any wallet lists.
+
+## How it discovers traders
+
+On every refresh (default every 15 min) it queries Polymarket's public ranking
+API at `lb-api.polymarket.com` across **8 leaderboards** — profit and volume,
+each at windows `1d / 7d / 30d / all` — and folds every unique wallet into a
+**rolling pool** stored in `data/state.json`. Wallets stay in the pool until
+they haven't appeared in any leaderboard for ~180 days, at which point they
+age out.
+
+Then for each of your six tracking windows it ranks the pool:
+
+| Window | PnL source                                                |
+| ------ | --------------------------------------------------------- |
+| 30d    | lb-api `pnl` (matches polymarket.com/leaderboard exactly) |
+| all    | lb-api `pnl` (matches polymarket.com/leaderboard exactly) |
+| 60d    | computed locally from positions + trade history           |
+| 90d    | computed locally from positions + trade history           |
+| 6m     | computed locally from positions + trade history           |
+| 12m    | computed locally from positions + trade history           |
+
+For the four computed windows, PnL is approximated by walking each wallet's
+fills chronologically (realized) and marking their open positions to current
+price (unrealized), filtered by the entry timestamp falling inside the window.
+That's not Polymarket's exact internal number — fee accounting differs — but
+the ordering is reliable in practice.
 
 ## What it does
 
 Three modes, all in one process:
 
-1. **Notify.** Recomputes a leaderboard every `LEADERBOARD_REFRESH_SEC`,
-   tracks the union of the top N across all windows, polls each wallet's
-   trade activity every `POLL_INTERVAL_SEC`, and sends a WhatsApp message
-   for every new trade.
+1. **Notify.** The watch daemon polls the trade activity of every wallet in
+   the union of your top-10s, every `POLL_INTERVAL_SEC` (default 20s), and
+   sends a WhatsApp message per new trade.
 2. **Auto-execute (off by default).** When `AUTO_EXECUTE=true`, the bot
    submits a matching BUY order via the Polymarket CLOB on Polygon, sized
    per `SIZING_MODE` and capped by `MAX_TRADE_USDC` / `MAX_OPEN_USDC`. It
    only mirrors opens (buys); closes are not mirrored automatically.
-3. **Dashboard.** `pm-tracker dashboard` serves a read-only view of the
-   current leaderboards, recently active wallets, and any mirrored trades.
-
-## Time windows
-
-Ranks PnL over: **30d, 60d, 90d, 6m, 12m, all-time**.
-
-PnL is approximated locally from each candidate wallet's positions (current
-mark) and trade history (realized fills walked chronologically). This is
-intentionally not the exact number Polymarket displays on its own
-leaderboard — fee accounting differs — but the ordering is reliable in
-practice.
+3. **Dashboard.** `pm-tracker dashboard` serves a read-only UI of the
+   current leaderboards (with usernames, "native" vs "computed" badge),
+   recently active wallets, and any mirrored trades.
 
 ## Quickstart
 
 ```bash
 cd polymarket-tracker
 npm install
-cp .env.example .env
-cp data/candidates.example.json data/candidates.json
-# edit data/candidates.json: add wallet addresses you want ranked
-# (scrape polymarket.com/leaderboard, ask in community channels, etc.)
-
-# one-shot: print the leaderboards
-node src/index.js leaderboard
-
-# long-running: refresh leaderboards, watch trades, send alerts
-node src/index.js watch
-
-# in another terminal: dashboard at http://localhost:8787
-node src/index.js dashboard
+cp .env.example .env       # add Twilio creds (optional) and recipients
+node src/index.js leaderboard         # one-shot: print all 6 leaderboards
+node src/index.js leaderboard --fast  # only 30d + all-time (no local compute)
+node src/index.js watch               # long-running daemon
+node src/index.js dashboard           # web dashboard at :8787
 ```
 
-You can also `npm install -g .` and use the `pm-tracker` binary directly.
+The first run takes ~30–60 seconds — it pulls 8 leaderboards from lb-api,
+then computes PnL across the four non-native windows for the discovered pool
+(typically 200–500 unique wallets).
 
-## Candidate wallets
+You can `npm install -g .` and use the `pm-tracker` binary directly.
 
-The bot ranks **wallets you give it**. It does not currently scrape
-Polymarket's UI — that page is JS-rendered and would invite breakage. To
-seed your candidate list:
+## Pinning extra wallets (optional)
 
-- Manually copy addresses from polymarket.com/leaderboard.
-- Add wallets from Twitter / Discord / on-chain explorers.
-- Use `pm-tracker seed --wallets 0xabc...,0xdef...` to append to
-  `data/candidates.json`.
+If there's a specific wallet you want tracked even if they don't show up in
+lb-api's top 100s, add it manually:
 
-The more candidates you add (50–500 is reasonable), the more meaningful
-"top 10" becomes.
+```bash
+node src/index.js seed --wallets 0xabc...,0xdef...
+```
 
-If/when you discover a public Polymarket leaderboard JSON endpoint, set
-`LEADERBOARD_API_BASE` and the bot will use it as an additional candidate
-source.
+This appends to `data/candidates.json`, which is merged into the pool on every
+refresh.
+
+## CLI
+
+| Command                                  | Purpose                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `pm-tracker leaderboard`                 | Refresh pool, print all 6 windows.                                               |
+| `pm-tracker leaderboard --fast`          | Refresh pool, print only 30d + all-time. Skips the local PnL compute.            |
+| `pm-tracker watch`                       | Daemon: refresh leaderboards on a timer, poll trades, alert, optionally mirror.  |
+| `pm-tracker dashboard`                   | Static dashboard at `http://localhost:8787`.                                     |
+| `pm-tracker seed --wallets 0x...,0x...`  | Pin extra wallets that always live in the pool.                                  |
 
 ## WhatsApp setup (Twilio)
 
@@ -89,8 +104,8 @@ The bot uses Twilio's WhatsApp API. Steps:
    `WHATSAPP_TO`. For sandbox, each recipient must first text the
    join-code to the sandbox number once.
 
-If any WhatsApp env var is missing the WhatsApp notifier is silently
-disabled and you'll only get console alerts. That is fine for testing.
+If any WhatsApp env var is missing the WhatsApp notifier is silently disabled
+and you'll only get console alerts. That is fine for testing.
 
 ## Auto-execute setup (read this carefully)
 
@@ -123,35 +138,41 @@ Hard limits enforced in code:
 ```
 polymarket-tracker/
   data/
-    candidates.json     # wallets to rank (you maintain this)
-    state.json          # leaderboards, last-seen trade timestamps, mirrored trades
+    state.json          # rolling pool + leaderboards + last-seen trade ts + mirrored trades
+    candidates.json     # optional pinned wallets (seed)
   src/
-    polymarket/         # API client + ranker + executor
-    notify/             # console + WhatsApp
-    cli/                # command implementations
+    polymarket/
+      api.js            # HTTP client (gamma, data, lb-api)
+      discovery.js      # lb-api -> rolling pool entries
+      leaderboard.js    # ranks pool: native PnL for 30d/all, computed for others
+      activity.js       # polls each top-N wallet's recent trades
+      trader.js         # CLOB auto-execute (off by default)
+    notify/             # console + WhatsApp via Twilio
+    cli/                # leaderboard / watch / seed commands
     dashboard/          # express + static UI
 ```
 
 `state.json` is gitignored. Delete it to fully reset the bot's memory of
-which trades it has already alerted on.
+which trades it has already alerted on (and rebuild the pool from scratch).
 
 ## Troubleshooting
 
-- **Empty leaderboards.** Most likely your `data/candidates.json` is the
-  example placeholder (`0x000...`). Add real addresses.
-- **"non-retryable HTTP 404" in debug log.** A given candidate wallet
-  has never traded on Polymarket; safe to ignore.
-- **Polymarket changed their API shape.** Check
-  `src/polymarket/leaderboard.js` (`tradeTimestamp`, `tradeSide`,
-  `tradePrice`, `tradeSize`, `positionPnl`) and
-  `src/polymarket/activity.js` (`normalizeTrade`). All field aliases live
-  there.
-- **WhatsApp messages not arriving.** The Twilio sandbox requires every
-  recipient to opt in by texting the sandbox join-code. Production senders
-  require pre-approved templates for un-prompted messages outside a
-  24-hour session window — this bot's alerts probably won't qualify, so
-  you may need a session-window approach (alert only after the user has
-  messaged the bot recently).
+- **`lb-api returned no wallets`.** Network issue or Polymarket changed the
+  endpoint. Confirm `https://lb-api.polymarket.com/profit?window=30d&limit=10`
+  works in your browser. Override `LEADERBOARD_API_BASE` in `.env` if needed.
+- **Computed windows look weird (60d, 90d, etc).** Local PnL only counts a
+  position's unrealized profit when its first fill is inside the window — for
+  long-running positions this can underrepresent real performance. If that
+  bothers you, run `--fast` and trust only the native windows.
+- **Polymarket changed their API shape.** Field aliases live in:
+  - `src/polymarket/discovery.js` (`walletOf`, native row fields)
+  - `src/polymarket/leaderboard.js` (`tradeTimestamp`, `tradeSide`, etc.)
+  - `src/polymarket/activity.js` (`normalizeTrade`)
+- **WhatsApp messages not arriving.** Twilio sandbox requires every recipient
+  to opt in by texting the sandbox join-code. Production senders require
+  pre-approved templates for unprompted messages outside a 24-hour session
+  window — this bot's alerts may not qualify, so you may need to fall back
+  to a Telegram/Discord webhook (open an issue / extend `src/notify/`).
 
 ## License
 

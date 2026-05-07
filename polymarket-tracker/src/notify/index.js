@@ -9,14 +9,16 @@ export async function notifyAll(notifiers, text) {
   await Promise.all(notifiers.map((n) => n.send(text).catch(() => {})));
 }
 
-export function formatTrade(t, rank) {
+export function formatTrade(t, rank, username) {
   const dir = t.side === 'BUY' || t.side === 'BID' ? 'BUY ' : 'SELL';
   const usdc = t.usdc || t.size * t.price;
   const market = t.marketTitle || t.market || 'unknown market';
   const rankStr = rank ? `#${rank} ` : '';
-  const short = `${t.wallet.slice(0, 6)}...${t.wallet.slice(-4)}`;
+  const who = username
+    ? `@${username}`
+    : `${t.wallet.slice(0, 6)}...${t.wallet.slice(-4)}`;
   return (
-    `Polymarket: ${rankStr}${short} ${dir} ` +
+    `Polymarket: ${rankStr}${who} ${dir} ` +
     `${t.size.toFixed(2)} @ $${t.price.toFixed(3)} ` +
     `(~$${usdc.toFixed(2)}) on "${market}"`
   );

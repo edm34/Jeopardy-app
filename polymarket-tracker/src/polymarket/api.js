@@ -90,10 +90,16 @@ export async function getMarket(slugOrId) {
   return null;
 }
 
-// ---- Leaderboard (optional) -------------------------------------------------
+// ---- Leaderboard (lb-api.polymarket.com) ------------------------------------
+// The public ranking API. Returns an array of:
+//   { rank, proxyWallet, userName, vol, pnl, profileImage, xUsername, ... }
+// Supported windows on the upstream API are: 1d, 7d, 30d, all.
 
-export async function getRemoteLeaderboard(window) {
-  if (!config.api.leaderboard) return null;
-  const url = `${config.api.leaderboard}/profit${qs({ window, limit: 100 })}`;
-  return await request(url);
+export async function getRemoteLeaderboard(metric, window, { limit = 100 } = {}) {
+  if (!config.api.leaderboard) return [];
+  const path = metric === 'volume' ? 'volume' : 'profit';
+  const url = `${config.api.leaderboard}/${path}${qs({ window, limit })}`;
+  const json = await request(url);
+  if (!json) return [];
+  return Array.isArray(json) ? json : json.data ?? [];
 }

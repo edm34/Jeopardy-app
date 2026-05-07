@@ -5,14 +5,21 @@ const HELP = `
 pm-tracker <command>
 
 Commands:
-  leaderboard            Compute and print top traders by PnL across all windows.
-  watch                  Long-running daemon: refresh leaderboards, poll trades,
-                         send notifications, optionally mirror trades.
-  dashboard              Serve the web dashboard (read-only view of state.json).
-  seed --wallets a,b,c   Append wallet addresses to data/candidates.json.
+  leaderboard [--fast]   Auto-discover top Polymarket traders from lb-api,
+                         then print the top 10 PnL leaders across 30d / 60d /
+                         90d / 6m / 12m / all-time. --fast skips the local
+                         compute and prints only 30d + all-time.
+  watch                  Long-running daemon: keeps the trader pool fresh,
+                         polls each top-N wallet's trades, sends WhatsApp
+                         alerts, optionally mirrors trades on Polymarket.
+  dashboard              Web dashboard at http://localhost:8787.
+  seed --wallets a,b,c   (Optional) Pin extra wallets that should always
+                         live in the pool, even if they fall out of lb-api's
+                         top 100s.
   help                   Show this message.
 
-Configure via .env (copy .env.example).
+No manual setup is required for tracking. Configure WhatsApp / auto-execute
+in .env (copy .env.example).
 `;
 
 async function main() {

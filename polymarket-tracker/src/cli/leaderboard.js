@@ -1,7 +1,8 @@
 import { WINDOWS, config } from '../config.js';
 import { log } from '../log.js';
-import { rankCandidates } from '../polymarket/leaderboard.js';
-import { loadCandidates, loadState, saveState } from '../store.js';
+import { rankPool } from '../polymarket/leaderboard.js';
+import { discoverPoolEntries } from '../polymarket/discovery.js';
+import { loadCandidates, loadState, saveState, upsertPool } from '../store.js';
 
 function fmtUsd(n) {
   const sign = n < 0 ? '-' : ' ';
@@ -17,24 +18,53 @@ function printTable(windowLabel, rows) {
     console.log('(no data)');
     return;
   }
-  console.log('rank  pnl              wallet');
+  console.log('rank  pnl              source     wallet                                       handle');
   rows.forEach((r, i) => {
+    const handle = r.username ? `@${r.username}` : '';
     console.log(
-      `${String(i + 1).padStart(3)}.  ${fmtUsd(r.pnl).padStart(13)}    ${r.wallet}`,
+      `${String(i + 1).padStart(3)}.  ${fmtUsd(r.pnl).padStart(13)}    ${r.source.padEnd(8)} ${r.wallet}  ${handle}`,
     );
   });
 }
 
-export async function refreshLeaderboards() {
-  const candidates = await loadCandidates();
-  if (!candidates.length) {
+// Refreshes the rolling pool from lb-api, merges in any pinned wallets from
+// data/candidates.json, recomputes leaderboards across all six windows, and
+// persists. Returns the leaderboards so callers can print or expose them.
+export async function refreshLeaderboards({ computeNonNative = true } = {}) {
+  log.info(`discovering pool from ${config.api.leaderboard}...`);
+  const discovered = await discoverPoolEntries({ limit: 100 });
+  log.info(`discovered ${discovered.size} unique wallets across native windows`);
+
+  const pinned = await loadCandidates();
+  for (const w of pinned) {
+    if (!discovered.has(w)) {
+      discovered.set(w, {
+        username: null,
+        xUsername: null,
+        profileImage: null,
+        verifiedBadge: false,
+        nativePnl: {},
+        nativeVol: {},
+      });
+    }
+  }
+  if (pinned.length) log.info(`+ ${pinned.length} pinned wallets from data/candidates.json`);
+
+  if (!discovered.size) {
     throw new Error(
-      'No candidate wallets. Copy data/candidates.example.json to data/candidates.json and add wallet addresses, or run `pm-tracker seed --wallets 0x...,0x...`.',
+      `lb-api returned no wallets. Check connectivity to ${config.api.leaderboard} or override LEADERBOARD_API_BASE in .env.`,
     );
   }
-  log.info(`ranking ${candidates.length} candidate wallets...`);
-  const leaderboards = await rankCandidates(candidates, { topN: config.poll.topN });
-  const state = await loadState();
+
+  let state = await loadState();
+  state = upsertPool(state, discovered);
+  await saveState(state);
+
+  const leaderboards = await rankPool(state.pool, {
+    topN: config.poll.topN,
+    computeNonNative,
+  });
+
   state.leaderboards = leaderboards;
   state.leaderboardsUpdatedAt = Math.floor(Date.now() / 1000);
   await saveState(state);
@@ -42,6 +72,14 @@ export async function refreshLeaderboards() {
 }
 
 export async function runLeaderboard() {
-  const lbs = await refreshLeaderboards();
-  for (const w of WINDOWS) printTable(w.label, lbs[w.id] || []);
+  const args = process.argv.slice(3);
+  const fast = args.includes('--fast'); // skip the 60d/90d/6m/12m local compute
+  const lbs = await refreshLeaderboards({ computeNonNative: !fast });
+  for (const w of WINDOWS) {
+    if (fast && !['30d', 'all'].includes(w.id)) continue;
+    printTable(w.label, lbs[w.id] || []);
+  }
+  if (fast) {
+    console.log('\n(--fast: only native lb-api windows shown. Run without --fast for 60d/90d/6m/12m.)');
+  }
 }

@@ -15,6 +15,8 @@ export function runDashboard() {
     const state = await loadState();
     res.json({
       updatedAt: state.leaderboardsUpdatedAt,
+      poolSize: Object.keys(state.pool || {}).length,
+      poolUpdatedAt: state.poolUpdatedAt || 0,
       windows: WINDOWS,
       leaderboards: state.leaderboards,
     });

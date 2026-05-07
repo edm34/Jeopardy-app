@@ -25,7 +25,7 @@ export const config = {
     gamma: process.env.GAMMA_API_BASE || 'https://gamma-api.polymarket.com',
     data: process.env.DATA_API_BASE || 'https://data-api.polymarket.com',
     clob: process.env.CLOB_API_BASE || 'https://clob.polymarket.com',
-    leaderboard: process.env.LEADERBOARD_API_BASE || '',
+    leaderboard: process.env.LEADERBOARD_API_BASE || 'https://lb-api.polymarket.com',
   },
   poll: {
     intervalSec: num(process.env.POLL_INTERVAL_SEC, 20),
