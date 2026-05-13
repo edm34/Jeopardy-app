@@ -1,0 +1,13 @@
+# Repo-root Nixpacks config. The bot lives in polymarket-tracker/; this
+# config makes Railway deploy correctly from the repo root with no UI
+# setting needed.
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["cd polymarket-tracker && (npm ci --omit=dev || npm install --omit=dev)"]
+
+[start]
+cmd = "cd polymarket-tracker && node src/index.js start"
