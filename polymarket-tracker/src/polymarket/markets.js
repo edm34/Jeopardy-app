@@ -67,38 +67,39 @@ export function normalizeMarket(m) {
   };
 }
 
-// Fetch all binary markets resolving within the next `withinHours`. Pages
-// through gamma if the first page is full.
-export async function fetchMarketsEndingSoon({ withinHours = 24, hardCap = 1500 } = {}) {
+// Fetch all binary markets resolving within the next `withinHours`. We don't
+// assume gamma's sort order — pages through and filters every market by its
+// own end_date.
+export async function fetchMarketsEndingSoon({ withinHours = 24, hardCap = 3000 } = {}) {
   const nowSec = Math.floor(Date.now() / 1000);
-  const cutoffSec = nowSec + withinHours * HOUR_SEC;
+  const cutoffSec = nowSec + withinHours * 3600;
+  const cutoffIso = new Date(cutoffSec * 1000).toISOString();
   const pageSize = 500;
   const out = [];
   for (let offset = 0; offset < hardCap; offset += pageSize) {
     let page;
     try {
-      page = await listMarkets({ limit: pageSize, offset });
+      page = await listMarkets({
+        limit: pageSize,
+        offset,
+        // Try both common Polymarket param spellings; gamma ignores unknowns.
+        extra: { end_date_max: cutoffIso, endDateMax: cutoffIso },
+      });
     } catch (err) {
       log.warn(`gamma listMarkets offset=${offset} failed: ${err.message}`);
       break;
     }
     if (!page.length) break;
-    let stop = false;
     for (const raw of page) {
       const m = normalizeMarket(raw);
       if (!m.conditionId || (!m.yesTokenId && !m.noTokenId)) continue;
       if (!m.endSec) continue;
-      if (m.endSec > cutoffSec) {
-        // gamma returns ascending by endDate; once we pass the cutoff we can
-        // stop paging.
-        stop = true;
-        break;
-      }
       if (m.endSec <= nowSec) continue; // already past end date
+      if (m.endSec > cutoffSec) continue; // too far out (defense in depth — server filter should already exclude)
       if (m.closed || m.archived || !m.active) continue;
       out.push(m);
     }
-    if (stop || page.length < pageSize) break;
+    if (page.length < pageSize) break;
   }
   return out;
 }

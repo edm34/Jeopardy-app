@@ -55,7 +55,9 @@ export async function scanSureThings(state) {
 
   const markets = await fetchMarketsEndingSoon({ withinHours });
   log.info(`sure-thing: ${markets.length} markets resolve within ${withinHours}h`);
-  if (!markets.length) return [];
+  if (!markets.length) {
+    return { all: [], gated: [], updatedAt: Math.floor(Date.now() / 1000) };
+  }
 
   const pool = poolWallets(state);
   const hitRates = getWalletHitRates(state);
