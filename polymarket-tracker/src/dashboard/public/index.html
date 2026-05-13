@@ -38,20 +38,50 @@
       .empty { color: #8b949e; font-style: italic; }
       a { color: #58a6ff; text-decoration: none; }
       a:hover { text-decoration: underline; }
+      .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; margin-left: 6px; vertical-align: middle; }
+      .badge-green { background: #1f6a35; color: #d2f8d2; }
+      .badge-amber { background: #6b4f1d; color: #f8e6b2; }
+      .badge-red { background: #6a1f1f; color: #f8d2d2; }
+      .badge-blue { background: #1f4d6a; color: #cfeaff; }
+      .mode-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: #21262d; color: #c9d1d9; margin-right: 6px; }
+      .countdown { font-variant-numeric: tabular-nums; color: #8b949e; font-size: 12px; }
+      .question { color: #e6edf3; }
+      .question a { color: #e6edf3; }
+      .question a:hover { color: #58a6ff; }
     </style>
   </head>
   <body>
     <h1>Polymarket Trader Tracker</h1>
     <div class="meta" id="meta">Loading...</div>
-    <div class="grid" id="leaderboards"></div>
 
     <div class="section">
-      <h2>Recently active tracked wallets</h2>
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">
+        Today's near-sure-things <span id="sure-mode"></span>
+      </h2>
+      <div id="sure-things" class="card"></div>
+    </div>
+
+    <div class="section">
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">PnL leaderboards</h2>
+      <div class="grid" id="leaderboards"></div>
+    </div>
+
+    <div class="section">
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">Smart money by hit rate</h2>
+      <div id="hit-rate" class="card"></div>
+    </div>
+
+    <div class="section">
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">Recently active tracked wallets</h2>
       <div id="recent" class="card"></div>
     </div>
     <div class="section">
-      <h2>Mirrored trades</h2>
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">Mirrored trades</h2>
       <div id="mirrored" class="card"></div>
+    </div>
+    <div class="section">
+      <h2 style="color:#58a6ff;margin:0 0 8px;font-size:15px">Sure-thing placements</h2>
+      <div id="sure-placed" class="card"></div>
     </div>
 
     <script>
@@ -64,13 +94,25 @@
       };
       const shortWallet = (w) => w.slice(0, 6) + '...' + w.slice(-4);
       const polyUserUrl = (w) => 'https://polymarket.com/profile/' + w;
+      const polyEventUrl = (slug) => slug ? 'https://polymarket.com/event/' + slug : null;
       const tsHuman = (ts) => ts ? new Date(ts * 1000).toLocaleString() : '';
+      const countdown = (endSec) => {
+        if (!endSec) return '';
+        const left = endSec - Math.floor(Date.now() / 1000);
+        if (left <= 0) return 'ended';
+        const h = Math.floor(left / 3600);
+        const m = Math.floor((left % 3600) / 60);
+        return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+      };
+      const pct = (n) => (n * 100).toFixed(1) + '%';
 
       async function refresh() {
-        const [lbRes, recentRes, mirRes] = await Promise.all([
+        const [lbRes, recentRes, mirRes, sureRes, hrRes] = await Promise.all([
           fetch('/api/leaderboards').then((r) => r.json()),
           fetch('/api/recent-trades').then((r) => r.json()),
           fetch('/api/mirrored').then((r) => r.json()),
+          fetch('/api/sure-things').then((r) => r.json()),
+          fetch('/api/hit-rate').then((r) => r.json()),
         ]);
         document.getElementById('meta').textContent =
           'pool: ' + (lbRes.poolSize || 0) + ' wallets · ' +
@@ -138,6 +180,130 @@
               )
               .join('') +
             '</tbody></table>';
+
+        renderSureThings(sureRes);
+        renderHitRate(hrRes);
+        renderSurePlaced(sureRes);
+      }
+
+      function renderSureThings(sureRes) {
+        const mode = sureRes.mode || {};
+        document.getElementById('sure-mode').innerHTML =
+          '<span class="mode-pill">price &ge; ' + (mode.threshold * 100).toFixed(0) + '%</span>' +
+          '<span class="mode-pill">resolves &lt; ' + mode.maxHours + 'h</span>' +
+          '<span class="mode-pill">exec: ' + mode.execMode + '</span>' +
+          '<span class="mode-pill">rule: ' + mode.smartMoneyRule + '</span>';
+
+        const card = document.getElementById('sure-things');
+        const list = sureRes.gated || [];
+        if (sureRes.updatedAt === 0) {
+          card.innerHTML = '<div class="empty">scanner has not run yet — first scan happens within ~5 min of boot</div>';
+          return;
+        }
+        if (list.length === 0) {
+          const total = (sureRes.all || []).length;
+          card.innerHTML =
+            '<div class="empty">no candidates pass the current rule' +
+            (total > 0 ? ' (' + total + ' priced markets failed the smart-money filter)' : '') +
+            ' &middot; updated ' + tsHuman(sureRes.updatedAt) + '</div>';
+          return;
+        }
+        card.innerHTML =
+          '<div style="margin-bottom:8px;color:#8b949e">' + list.length + ' candidate' + (list.length === 1 ? '' : 's') +
+          ' &middot; updated ' + tsHuman(sureRes.updatedAt) + '</div>' +
+          '<table><thead><tr>' +
+          '<th>market</th>' +
+          '<th>side</th>' +
+          '<th style="text-align:right">price</th>' +
+          '<th style="text-align:right">resolves in</th>' +
+          '<th>smart money</th>' +
+          '<th style="text-align:right">pool hit %</th>' +
+          '</tr></thead><tbody>' +
+          list.map((c) => {
+            const link = polyEventUrl(c.slug);
+            const q = c.question ? (c.question.length > 70 ? c.question.slice(0, 70) + '...' : c.question) : c.conditionId;
+            const qHtml = link ? '<a href="' + link + '" target="_blank">' + q + '</a>' : q;
+            const badge =
+              c.smartMoney.score === 'green' ? '<span class="badge badge-green">' + c.smartMoney.walletCount + ' pool wallets agree</span>' :
+              c.smartMoney.score === 'red'   ? '<span class="badge badge-red">' + c.smartMoney.walletCount + ' pool wallets opposing</span>' :
+              '<span class="badge badge-amber">no pool activity</span>';
+            const sureUsd = c.sureSide === 'YES' ? c.smartMoney.yesUsdc : c.smartMoney.noUsdc;
+            const oppUsd = c.sureSide === 'YES' ? c.smartMoney.noUsdc : c.smartMoney.yesUsdc;
+            const flow = (sureUsd > 0 || oppUsd > 0)
+              ? '<div style="font-size:11px;color:#8b949e">+' + fmtUsd(sureUsd) + ' on ' + c.sureSide + ' &middot; ' + fmtUsd(oppUsd) + ' opposing</div>'
+              : '';
+            const hr = c.hitRateContext?.avgHitRate;
+            const hrHtml = hr !== null && hr !== undefined
+              ? '<span class="' + (hr >= 0.6 ? 'pnl-pos' : 'pnl-neg') + '">' + pct(hr) + '</span><span style="color:#8b949e;font-size:11px"> (n=' + c.hitRateContext.sampled + ')</span>'
+              : '<span style="color:#8b949e">—</span>';
+            return '<tr><td class="question">' + qHtml + '</td>' +
+              '<td><span class="badge badge-blue">' + c.sureSide + '</span></td>' +
+              '<td style="text-align:right" class="pnl-pos">' + (c.surePrice * 100).toFixed(1) + '%</td>' +
+              '<td style="text-align:right" class="countdown">' + countdown(c.endSec) + '</td>' +
+              '<td>' + badge + flow + '</td>' +
+              '<td style="text-align:right">' + hrHtml + '</td></tr>';
+          }).join('') +
+          '</tbody></table>';
+      }
+
+      function renderHitRate(hrRes) {
+        const card = document.getElementById('hit-rate');
+        const rows = hrRes.rows || [];
+        if (rows.length === 0) {
+          card.innerHTML =
+            '<div class="empty">building hit-rate data &middot; ' +
+            (hrRes.totalPositions || 0) + ' positions tracked, ' +
+            (hrRes.resolvedPositions || 0) + ' resolved so far</div>';
+          return;
+        }
+        card.innerHTML =
+          '<div style="margin-bottom:8px;color:#8b949e">' +
+          hrRes.resolvedPositions + ' resolved positions across ' + rows.length + ' wallets' +
+          ' &middot; min 3 resolved positions to appear</div>' +
+          '<table><thead><tr>' +
+          '<th>#</th><th>trader</th>' +
+          '<th style="text-align:right">hit %</th>' +
+          '<th style="text-align:right">W&ndash;L</th>' +
+          '<th style="text-align:right">net</th>' +
+          '</tr></thead><tbody>' +
+          rows.map((r, i) => {
+            const handle = r.username ? '@' + r.username : shortWallet(r.wallet);
+            const cls = r.hitRate >= 0.7 ? 'pnl-pos' : r.hitRate < 0.5 ? 'pnl-neg' : '';
+            return '<tr><td>' + (i + 1) + '</td>' +
+              '<td class="wallet"><a href="' + polyUserUrl(r.wallet) + '" target="_blank">' + handle + '</a></td>' +
+              '<td style="text-align:right" class="' + cls + '">' + (r.hitRate !== null ? pct(r.hitRate) : '—') + '</td>' +
+              '<td style="text-align:right">' + r.wins + '&ndash;' + r.losses + '</td>' +
+              '<td style="text-align:right" class="' + (r.netUsdc >= 0 ? 'pnl-pos' : 'pnl-neg') + '">' + fmtUsd(r.netUsdc) + '</td></tr>';
+          }).join('') +
+          '</tbody></table>';
+      }
+
+      function renderSurePlaced(sureRes) {
+        const card = document.getElementById('sure-placed');
+        const placed = sureRes.placed || [];
+        if (placed.length === 0) {
+          card.innerHTML = '<div class="empty">no sure-thing trades placed (exec: ' + sureRes.mode.execMode + ')</div>';
+          return;
+        }
+        card.innerHTML =
+          '<table><thead><tr>' +
+          '<th>when</th><th>market</th><th>side</th>' +
+          '<th style="text-align:right">price</th>' +
+          '<th style="text-align:right">$</th>' +
+          '<th>signal</th></tr></thead><tbody>' +
+          placed.map((t) => {
+            const q = t.question ? (t.question.length > 60 ? t.question.slice(0, 60) + '...' : t.question) : t.conditionId;
+            const link = polyEventUrl(t.slug);
+            const qHtml = link ? '<a href="' + link + '" target="_blank">' + q + '</a>' : q;
+            const badgeCls = t.smartMoneyScore === 'green' ? 'badge-green' : t.smartMoneyScore === 'red' ? 'badge-red' : 'badge-amber';
+            return '<tr><td>' + tsHuman(t.placedTs) + '</td>' +
+              '<td class="question">' + qHtml + '</td>' +
+              '<td>' + t.side + '</td>' +
+              '<td style="text-align:right">$' + t.price.toFixed(3) + '</td>' +
+              '<td style="text-align:right">' + fmtUsd(t.usdc) + '</td>' +
+              '<td><span class="badge ' + badgeCls + '">' + t.smartMoneyScore + '</span></td></tr>';
+          }).join('') +
+          '</tbody></table>';
       }
 
       refresh();

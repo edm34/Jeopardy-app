@@ -39,7 +39,7 @@ the ordering is reliable in practice.
 
 ## What it does
 
-Three modes, all in one process:
+Four modes, all in one process:
 
 1. **Notify.** The watch daemon polls the trade activity of every wallet in
    the union of your top-10s, every `POLL_INTERVAL_SEC` (default 20s), and
@@ -48,9 +48,65 @@ Three modes, all in one process:
    submits a matching BUY order via the Polymarket CLOB on Polygon, sized
    per `SIZING_MODE` and capped by `MAX_TRADE_USDC` / `MAX_OPEN_USDC`. It
    only mirrors opens (buys); closes are not mirrored automatically.
-3. **Dashboard.** `pm-tracker dashboard` serves a read-only UI of the
-   current leaderboards (with usernames, "native" vs "computed" badge),
-   recently active wallets, and any mirrored trades.
+3. **Sure-thing scanner.** Every `SURE_THING_SCAN_INTERVAL_SEC` (default
+   5 min) the bot queries gamma for markets resolving within
+   `SURE_THING_MAX_HOURS` (default 24), pulls each market's CLOB orderbook,
+   and flags any side priced at or above `SURE_THING_THRESHOLD` (default
+   0.97). For each candidate it overlays a *smart-money signal* — net
+   USDC bought by your tracked pool wallets in that market over the last
+   24h — and either surfaces it on the dashboard or auto-buys, depending
+   on `SURE_THING_EXEC_MODE` and `SURE_THING_SMART_MONEY_RULE`.
+4. **Dashboard.** `pm-tracker dashboard` serves a read-only UI of today's
+   near-sure-things, current leaderboards, a *hit-rate* leaderboard
+   (resolved-trade win % per wallet, built up as markets close), recently
+   active wallets, and any auto-placed trades.
+
+## The sure-thing strategy
+
+**What it is:** buy YES at &ge;$0.97 on markets that resolve within 24h,
+collecting ~3% per cycle. Confirm each trade against tracked-trader flow so
+you don't step in front of a smart-money "this is actually wrong" signal.
+
+**What you trade:** you're effectively selling tail risk for tiny premium.
+One catastrophic miss at $0.97 wipes ~32 wins, so position sizing and
+diversification across many small daily trades matter more than picking
+"the best" candidate.
+
+**Knobs (all live in `.env`):**
+
+| Variable                       | Effect                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| `SURE_THING_THRESHOLD`         | Price floor for "sure" (0.97 = strict, 0.95 = looser, more candidates).  |
+| `SURE_THING_MAX_HOURS`         | Resolves-within window. 24 keeps capital cycling daily.                  |
+| `SURE_THING_EXEC_MODE`         | `surface` / `confirm` / `all`. Start with `surface`.                     |
+| `SURE_THING_SMART_MONEY_RULE`  | `required` / `veto` / `advisory`. Start with `required`.                 |
+| `MAX_TRADE_USDC`               | Per-trade USDC cap (shared with mirror-trade path).                      |
+| `MAX_OPEN_USDC`                | Total open USDC ceiling across all auto-placed positions.                |
+| `SURE_THING_SLIPPAGE_BPS`      | Allowed slippage above best ask, in bps. 50 = 0.5%.                      |
+
+**Exec modes:**
+
+- `surface` — scanner runs, dashboard shows candidates, **bot never places
+  an order**. You bet manually. Safest. Use this until you've watched a few
+  full cycles.
+- `confirm` — bot auto-places sized buys only on candidates whose
+  smart-money score is *green* (pool wallets are net-buying the sure side).
+  Most defensive auto mode.
+- `all` — bot auto-places on every candidate that passes the
+  `SURE_THING_SMART_MONEY_RULE`. Highest throughput, highest tail risk.
+
+**Smart-money rules:**
+
+- `required` — candidate must show pool wallets net-buying the same side as
+  the price (strict; expect 0&ndash;3 candidates a day).
+- `veto` — every priced candidate passes *unless* pool wallets are
+  heavily on the opposite side.
+- `advisory` — no filtering; signal shown on dashboard but not gating.
+
+**Hit-rate leaderboard:** the bot records every observed pool-wallet open
+as a position; once that market resolves on gamma the position is marked
+W/L. Over days this builds a true win-rate ranking of the pool — separate
+from raw PnL — and weights the smart-money confirmation on each candidate.
 
 ## Quickstart
 

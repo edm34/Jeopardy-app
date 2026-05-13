@@ -15,6 +15,16 @@ const DEFAULT_STATE = {
   poolUpdatedAt: 0,
   mirroredTrades: [], // { srcWallet, srcTradeId, ourOrderId, marketId, side, size, price, ts }
   openMirroredUsdc: 0,
+  // Latest sure-thing scanner output. Refreshed every SURE_THING_SCAN_INTERVAL_SEC.
+  sureThings: { updatedAt: 0, gated: [], all: [] },
+  // Sure-thing buys we've placed. Separate from `mirroredTrades` so each
+  // strategy's lineage stays distinct.
+  sureThingTrades: [],
+  // Hit-rate tracker: every observed open from a pool wallet gets a position
+  // record; once the market resolves we mark it W/L and recompute per-wallet
+  // aggregates in hitRate.wallets.
+  hitRate: { positions: [], wallets: {} },
+  hitRateUpdatedAt: 0,
 };
 
 async function ensureDir() {

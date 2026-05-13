@@ -104,6 +104,31 @@ To make state persistent:
    start receiving WhatsApp messages within a few minutes of any top trader
    firing.
 
+## Step 5b (optional) — turn on the sure-thing strategy
+
+The bot ships with a "near-sure-things" scanner that flags markets resolving
+within 24h where one outcome is priced &ge; 97%. By default it just shows
+them in the dashboard — no money moves. Three pieces you can toggle in
+Railway → Variables:
+
+| Variable                       | Default     | What it does                                                    |
+| ------------------------------ | ----------- | --------------------------------------------------------------- |
+| `SURE_THING_THRESHOLD`         | `0.97`      | Price floor. Lower = more candidates, more tail risk.           |
+| `SURE_THING_MAX_HOURS`         | `24`        | Resolves-within window.                                         |
+| `SURE_THING_EXEC_MODE`         | `surface`   | `surface` / `confirm` / `all`.                                  |
+| `SURE_THING_SMART_MONEY_RULE`  | `required`  | `required` / `veto` / `advisory`.                               |
+
+**Recommended starting point:** leave all four at defaults. The dashboard's
+new "Today's near-sure-things" card will populate within ~5 min of the
+container booting. Watch which candidates the bot surfaces over several
+days, mentally tally win/loss, and only then change `SURE_THING_EXEC_MODE`
+to `confirm` (which still requires `AUTO_EXECUTE=true` and a funded
+`TRADER_PRIVATE_KEY` — Step 6).
+
+The dashboard's "Smart money by hit rate" section starts empty. It builds
+itself over the first week as tracked-pool positions resolve, then becomes
+the cleanest read on whose wagers are worth following.
+
 ## Step 6 (optional, dangerous) — enable auto-execute
 
 **Read `README.md` § Auto-execute setup before doing this.** Real money on

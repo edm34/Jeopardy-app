@@ -50,6 +50,26 @@ export const config = {
     sizingPercent: num(process.env.SIZING_PERCENT, 1),
     maxTradeAgeSec: num(process.env.MAX_TRADE_AGE_SEC, 120),
   },
+  sureThing: {
+    // Minimum implied probability to qualify (0.97 = "buy YES at $0.97 or
+    // tighter"). Tighter = fewer candidates but lower tail risk.
+    threshold: num(process.env.SURE_THING_THRESHOLD, 0.97),
+    // Only consider markets resolving within this many hours so capital
+    // turns over daily.
+    maxHours: num(process.env.SURE_THING_MAX_HOURS, 24),
+    // How long to scan back for smart-money trades on each candidate market.
+    smartLookbackHours: num(process.env.SURE_THING_SMART_LOOKBACK_HOURS, 24),
+    // Cadence of the sure-thing scan (separate from leaderboard/trade polling).
+    scanIntervalSec: num(process.env.SURE_THING_SCAN_INTERVAL_SEC, 300),
+    // surface | confirm | all
+    execMode: (process.env.SURE_THING_EXEC_MODE || 'surface').toLowerCase(),
+    // required | veto | advisory
+    smartMoneyRule: (process.env.SURE_THING_SMART_MONEY_RULE || 'required').toLowerCase(),
+    // Slippage allowed above best ask when placing orders, in basis points.
+    slippageBps: num(process.env.SURE_THING_SLIPPAGE_BPS, 50),
+    // How often to sweep resolved markets for hit-rate scoring.
+    resolutionSweepSec: num(process.env.HIT_RATE_SWEEP_SEC, 1800),
+  },
   dashboard: {
     // Railway / Render / Fly inject PORT. Honor it first so the dashboard
     // binds to whatever the platform expects; fall back to DASHBOARD_PORT

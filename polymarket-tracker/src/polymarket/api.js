@@ -90,6 +90,41 @@ export async function getMarket(slugOrId) {
   return null;
 }
 
+// List active, non-closed markets. The gamma API supports a number of filters;
+// we always pass active=true & closed=false and let callers pass extras (e.g.
+// end_date_max for the sure-thing scanner).
+export async function listMarkets({ limit = 500, offset = 0, extra = {} } = {}) {
+  const url = `${config.api.gamma}/markets${qs({
+    active: true,
+    closed: false,
+    limit,
+    offset,
+    order: 'endDate',
+    ascending: true,
+    ...extra,
+  })}`;
+  const json = await request(url);
+  if (!json) return [];
+  return Array.isArray(json) ? json : json.data ?? [];
+}
+
+// ---- CLOB API ---------------------------------------------------------------
+
+export async function getOrderbook(tokenId) {
+  const url = `${config.api.clob}/book${qs({ token_id: tokenId })}`;
+  const json = await request(url, { retries: 1 });
+  return json || null;
+}
+
+// Per-market trades. Used by the smart-money overlay to see which pool wallets
+// have hit a given market in the last N hours.
+export async function getMarketTrades(conditionId, { limit = 500 } = {}) {
+  const url = `${config.api.data}/trades${qs({ market: conditionId, limit })}`;
+  const json = await request(url, { retries: 1 });
+  if (!json) return [];
+  return Array.isArray(json) ? json : json.data ?? [];
+}
+
 // ---- Leaderboard (lb-api.polymarket.com) ------------------------------------
 // The public ranking API. Returns an array of:
 //   { rank, proxyWallet, userName, vol, pnl, profileImage, xUsername, ... }
