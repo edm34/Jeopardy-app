@@ -7,7 +7,7 @@ providers = ["node"]
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["cd polymarket-tracker && (npm ci --omit=dev || npm install --omit=dev)"]
+cmds = ["cd polymarket-tracker && npm install --omit=dev --no-audit --no-fund"]
 
 [start]
 cmd = "cd polymarket-tracker && node src/index.js start"
